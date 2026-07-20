@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# Runtime files
+.port
+.pid
+*.pid
+*.lock
+
+# Temporary / backup
+backups/

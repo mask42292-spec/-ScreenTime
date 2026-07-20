@@ -10,6 +10,10 @@
 - 悬浮球单例锁：PID 文件防止重复启动
 - 悬浮球自定义图片：将 float_ball.png 放入 ScreenTime 目录即可替换默认圆形图标，自动圆形裁剪
 
+### 修复
+- 修复系统睡眠/唤醒后采集器单 tick 内 elapsed 暴增导致使用时长数据膨胀的 Bug：增加 MAX_TICK_ELAPSED=5 秒上限，超出部分计入空闲时间
+- 修复多采集器实例同时运行导致同一 (date, hour, process_name) 行数据成倍累加的 Bug：增加 PID 文件单例锁（ensure_single_instance），启动时检测已有实例并拒绝重复启动
+
 ### 优化
 - 应用列表限制 20 行显示，超出行可滚动查看
 - 应用图标异步加载：优先获取真实 exe 图标（base64），失败时降级为首字母占位

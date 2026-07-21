@@ -10,40 +10,49 @@ import socket
 import webbrowser
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PID_FILE = os.path.join(SCRIPT_DIR, ".float_ball.pid")
 
-# ── Singleton: prevent duplicate instances ──
-if os.path.exists(PID_FILE):
-    try:
-        with open(PID_FILE) as f:
-            old_pid = int(f.read().strip())
-        # Check if that process is still running
-        if sys.platform == "win32":
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.OpenProcess(0x0400, False, old_pid)  # PROCESS_QUERY_INFORMATION
-            if handle:
-                kernel32.CloseHandle(handle)
-                # Process exists, exit silently
-                sys.exit(0)
-        else:
-            try:
-                os.kill(old_pid, 0)
-                sys.exit(0)
-            except OSError:
-                pass
-    except:
-        pass
-with open(PID_FILE, "w") as f:
-    f.write(str(os.getpid()))
+# ── Singleton: prevent duplicate instances via Windows Named Mutex ──
+# Kernel mutexes are atomic (no TOCTOU race), auto-released on process exit
+# (including crashes), and immune to PID recycling.  Far more robust than
+# a PID‑file approach.
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
 
-import atexit
-def cleanup_pid():
-    try:
-        os.remove(PID_FILE)
-    except:
-        pass
-atexit.register(cleanup_pid)
+    _kernel32 = ctypes.windll.kernel32
+    _CreateMutexW = _kernel32.CreateMutexW
+    _CreateMutexW.argtypes = [wintypes.LPCVOID, wintypes.BOOL, wintypes.LPCWSTR]
+    _CreateMutexW.restype = wintypes.HANDLE
+
+    ERROR_ALREADY_EXISTS = 183
+    MUTEX_NAME = "Local\\ScreenTimeFloatBallSingleton"
+
+    _mutex_handle = _CreateMutexW(None, False, MUTEX_NAME)
+    if _kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        # Another float_ball instance is already running – exit silently.
+        if _mutex_handle:
+            _kernel32.CloseHandle(_mutex_handle)
+        sys.exit(0)
+else:
+    # Non-Windows fallback: keep the PID-file approach
+    import atexit
+    PID_FILE = os.path.join(SCRIPT_DIR, ".float_ball.pid")
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE) as f:
+                old_pid = int(f.read().strip())
+            os.kill(old_pid, 0)
+            sys.exit(0)
+        except (OSError, ValueError):
+            pass
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    def _cleanup_pid():
+        try:
+            os.remove(PID_FILE)
+        except Exception:
+            pass
+    atexit.register(_cleanup_pid)
 
 # Read port
 port_file = os.path.join(SCRIPT_DIR, ".port")
